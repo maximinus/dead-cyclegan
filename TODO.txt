@@ -1,0 +1,9 @@
+Future Work
+-----------
+
+1: Add to gitlab (make contents of data is not moved)
+2: Document all
+3: Compare normalisation with Cycle-Consitency-Audio-Noise-Filter
+4: Switch to loading on the fly, instead of having numpy arrays saved
+5: Write code to build a track after being pushed through the model
+6: Push the results / settings to a file after the run

@@ -1,0 +1,20 @@
+# ignore all raw data
+data/
+
+# ignore saved models
+models/
+
+# ignore rendered data
+examples/
+
+# ignore test results
+test_result/
+
+# ignore ven
+venv/
+
+# ignore pycharm
+.idea/
+
+# ignore python builds
+__pycache__/
