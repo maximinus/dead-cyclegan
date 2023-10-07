@@ -1,7 +1,7 @@
 Future Work
 -----------
 
-1: Add to gitlab (make contents of data is not moved)
+*  Add to gitlab (make contents of data is not moved)
 2: Document all
 3: Compare normalisation with Cycle-Consitency-Audio-Noise-Filter
 4: Switch to loading on the fly, instead of having numpy arrays saved
