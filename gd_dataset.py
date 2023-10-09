@@ -1,6 +1,6 @@
 import os
-import sys
 
+import librosa
 import numpy as np
 
 from pathlib import Path
@@ -9,13 +9,14 @@ from random import shuffle
 import torch
 from torch.utils.data import Dataset, DataLoader
 
+SAMPLE_RATE = 44100
 BATCH_SIZE = 1
 ROOT_FOLDER = Path.cwd() / 'data' / 'Split'
 TEST_RATIO = 0.2
 MAX_FILES = 1500
 
 
-class GDDataSet(Dataset):
+class GDDataSetFromNumpy(Dataset):
     def __init__(self, files):
         self.file_list = files
         self.labels = [float(1) if x.startswith('SBD') else float(0) for x in self.file_list]
@@ -29,6 +30,30 @@ class GDDataSet(Dataset):
 
     def __len__(self):
         return len(self.labels)
+
+
+class GDDataSet(Dataset):
+    def __init__(self, files):
+        self.file_list = files
+        self.labels = [float(1) if x.startswith('SBD') else float(0) for x in self.file_list]
+
+    def file_to_numpy(self, filepath):
+        audio, _sample_rate = librosa.core.load(filepath, sr=self.sample_rate, mono=True)
+        if audio.dtype == np.int16:
+            audio = audio.astype(np.float32)
+            audio /= 32768
+        # reshape
+        audio = audio.reshape(1, audio.shape[0])
+        # and then normalise
+        audio /= np.max(np.abs(audio))
+        return audio
+
+    def __getitem__(self, index):
+        sfx = self.file_to_numpy(ROOT_FOLDER / self.file_list[index])
+        # return a tensor, not an array
+        data = torch.from_numpy(sfx)
+        data = data.cuda()
+        return data, torch.tensor(self.labels[index])
 
 
 def get_datasets():
@@ -65,10 +90,6 @@ def get_datasets():
     test_dataset = GDDataSet(test_files)
 
     return DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True), DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=True)
-
-
-def get_cyclegan_datasets():
-    pass
 
 
 if __name__ == '__main__':

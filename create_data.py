@@ -1,5 +1,6 @@
 import os
 import random
+import shutil
 import sys
 import math
 from pathlib import Path
@@ -21,8 +22,7 @@ OUTPUT_FOLDERS = ['Split']
 
 ROOT_FOLDER = Path.cwd() / 'data'
 SOURCE_FOLDER = ROOT_FOLDER / 'Original'
-OUTPUT_FOLDER = ROOT_FOLDER / 'Split_Half'
-#OUTPUT_FOLDER = ROOT_FOLDER / 'Linear'
+OUTPUT_FOLDER = ROOT_FOLDER / 'split'
 SAMPLE_FOLDER = Path.cwd() / 'test_result' / 'sample_audio'
 SAMPLE_FILE = Path.cwd() / 'test_result' / 'Around_And_Around.wav'
 WAV_FOLDER = ROOT_FOLDER / 'wav_split'
@@ -79,22 +79,21 @@ def stitch_track():
     soundfile.write('resampled.wav', full_array, 44100, subtype='PCM_16', format='WAV')
 
 
-def get_all_files(source):
-    # input must exist
+def get_all_wavs(source):
     if not os.path.isdir(source):
         error(f'Input path {input} does not exist')
-    # there must be some files, count them
-    filenames = []
-    for root, dirs, files in os.walk(source):
-        filenames.extend([Path(root) / x for x in files])
-    if len(filenames) == 0:
-        error('No files in source directory')
-    # clear out all non-wav files
-    wav_filenames = [x for x in filenames if x.suffix == '.wav']
-    if len(wav_filenames) == 0:
-        error('No wav files in input directory')
-    print(f'  * Found {len(wav_filenames)} wav files')
-    return wav_filenames
+    # get all folders here
+    folders = []
+    total = 0
+
+    print([x for x in filter(lambda x: (os.path.isdir(source / x)), os.listdir(source))])
+
+    for folder in filter(lambda x: (os.path.isdir(source / x)), os.listdir(source)):
+        all_wav_files = [x for x in filter(lambda x: (str(x).endswith('wav')), os.listdir(source / folder))]
+        folders.append([folder, all_wav_files])
+        total += len(all_wav_files)
+    print(f'  * Found {total} files in {len(folders)} folders')
+    return folders
 
 
 def remove_silence(audio):
@@ -216,7 +215,7 @@ def save_single_channel_wav(output, audio, index, channel_name, sbd=True):
 
 
 def write_to_tmp(folder):
-    wav_files = get_all_files(SOURCE_FOLDER)
+    wav_files = get_all_wavs(SOURCE_FOLDER)
     for index, f in enumerate(tqdm(wav_files)):
         audio, sr = librosa.load(f, sr=FREQUENCY, mono=False)
         # aud or sbd? check parent
@@ -237,7 +236,8 @@ def split_wavs():
     tmp_folder = WAV_FOLDER / 'tmp'
     #write_to_tmp(tmp_folder)
     # get a list of all the files
-    all_files = get_all_files(tmp_folder)
+    #all_files = get_all_wav_files(tmp_folder)
+    all_files = []
     print(f'  * Got {len(all_files)} files')
     print(all_files[0])
     # split into sbd and aud
@@ -271,20 +271,19 @@ def split_wavs():
 
 
 def save_wav_single_channel(audio, index, is_sbd, left):
-    length = SAMPLE_LENGTH
     audio_index = 0
     inner_index = 0
     if left:
         channel_name = 'left'
     else:
         channel_name = 'right'
-    while audio_index + length <= len(audio):
+    while audio_index + SAMPLE_LENGTH <= len(audio):
         if is_sbd:
             output_filename = WAV_FOLDER / f'SBD_{index}_{inner_index}_{channel_name}.wav'
         else:
             output_filename = WAV_FOLDER / f'AUD_{index}_{inner_index}_{channel_name}.wav'
         # they need to be saved as pure audio for now
-        audio_slice = audio[audio_index:audio_index + length]
+        audio_slice = audio[audio_index:audio_index + SAMPLE_LENGTH]
         soundfile.write(str(output_filename), audio_slice, FREQUENCY, 'PCM_16')
         audio_index += SAMPLE_LENGTH
         inner_index += 1
@@ -306,8 +305,53 @@ def wav_split(files):
         index += 1
 
 
+def clear_old_data():
+    shutil.rmtree(OUTPUT_FOLDER)
+    os.mkdir(OUTPUT_FOLDER)
+
+
+def save_channel(source, destination, channel_name, is_sbd):
+    audio_index = 0
+    file_index = 0
+    while audio_index + SAMPLE_LENGTH < len(source):
+        filename = destination / f'{file_index:04}_{channel_name}.wav'
+        audio_slice = source[audio_index:audio_index + SAMPLE_LENGTH]
+        soundfile.write(str(filename), audio_slice, FREQUENCY, 'PCM_16')
+        audio_index += SAMPLE_LENGTH
+        file_index += 1
+
+
+def split_single_wav(directory, file):
+    main_dir = OUTPUT_FOLDER / directory.name
+    # make sure the directory exists
+    if not os.path.exists(main_dir):
+        os.mkdir(main_dir)
+    # make the new directory, minus the .wav
+    song_dir = main_dir / file[:-4]
+    os.mkdir(song_dir)
+    is_sbd = str(directory.name).endswith('SBD')
+    # load the audio
+    audio, sr = librosa.load(SOURCE_FOLDER / directory.name / file, sr=FREQUENCY, mono=False)
+    # remove any silence from the wav
+    audio = librosa.effects.trim(audio, top_db=20)
+    # split into channels and save - trim changes the dimensions
+    save_channel(audio[0][0], song_dir, 'LEFT', is_sbd)
+    save_channel(audio[0][1], song_dir, 'LEFT', is_sbd)
+
+
+def split_wav_files(folders):
+    for folder in folders:
+        new_directory = OUTPUT_FOLDER / folder[0]
+        os.mkdir(SOURCE_FOLDER / new_directory)
+        for track in tqdm(folder[1]):
+            split_single_wav(new_directory, track)
+
+
 if __name__ == '__main__':
-    all_files = get_all_files(SOURCE_FOLDER)
-    wav_split(all_files)
+    #all_files = get_all_files(SOURCE_FOLDER)
+    #wav_split(all_files)
     #process_files(all_files)
     #write_test_sample()
+    wav_folders = get_all_wavs(SOURCE_FOLDER)
+    clear_old_data()
+    split_wav_files(wav_folders)
