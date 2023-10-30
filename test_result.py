@@ -5,8 +5,6 @@ import numpy as np
 from tqdm import tqdm
 
 from pathlib import Path
-from datetime import datetime
-
 
 # needed for the model load
 from cyclegan import ResidualBlock, device
@@ -20,7 +18,6 @@ OUTPUT_DIRECTORY = Path.cwd() / 'test_result'
 def load_model():
     # scan folder for all files
     all_files = glob.glob(str(MODEL_DIRECTORY) + '/*.pth')
-    current = datetime.now()
     newest_file = [None, 0]
     for i in all_files:
         filename = i.split('/')[-1]
