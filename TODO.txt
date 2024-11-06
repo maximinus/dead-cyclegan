@@ -1,9 +1,45 @@
 Future Work
 -----------
 
-*  Add to gitlab (make contents of data is not moved)
-2: Document all
-3: Compare normalisation with Cycle-Consitency-Audio-Noise-Filter
-4: Switch to loading on the fly, instead of having numpy arrays saved
-5: Write code to build a track after being pushed through the model
-6: Push the results / settings to a file after the run
+The projects goal is to convert GD audience recordings to GD soundboard recordings with machine learning.
+
+Concrete results so far are:
+
+* We are able to use raw audio in tensorflow.
+* We have a discriminator that can detect sbd vs aud.
+* We have a working implementation of Cyclegan for images.
+* We have the same cyclegan for audio, and it can output audio.
+
+Current issues:
+
+* The sound returned is centered around -1 when viewed in Audacity. What should it be?
+* What direction should the graphs move by? What could push them in that direction?
+* What does the graph of the discriminator by itself look like?
+* Once this is established, is that the same direction the discriminator looks like in the cyclegan?
+
+
+Possible methods to improve:
+
+* Impairing the discriminator by randomly giving false labels to real images (one-sided label flipping)
+* Impairing the discriminator by adding dropout layers
+* Improving the generator's ability to create more features by increasing the number of filters in its convolution layers
+* Impairing the discriminator by reducing its number of filters
+
+Checked tests:
+    Monitor the discriminators.
+    They should be identical to the one that we know is working.
+    We have 2 discriminators here, it should be easy to check they show similar graphs.
+    Especially since we don't care about the generators here at all.
+        * Done: The discriminators seem to work fine
+
+    Check the generator scores for SBD -> AUD / AUD -> SBD
+    We expect that as we increase / sample size, then the scores should improve. Check this.
+        * Done: No real difference
+
+    Another check is to confirm the range of the final generated output.
+    Is there something we are doing here? Do we expect all layers to be between 0 and 1? Why/Why not?
+    We use leakyRELU so that means > 0 we keep it and negative values are something like (X * -0.1)
+        * Fixed: All ranges are 0 -> 1
+
+We seem to have a failure to converge. That is, we expect the discriminator to stay around 0.5, as the generators should
+be learning at about the same speed as the discriminators, otherwise they will always fail and not learn anything.

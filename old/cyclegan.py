@@ -4,7 +4,6 @@ import time
 import shutil
 import random
 
-import librosa
 import torch
 import torch.nn as nn
 import numpy as np
@@ -19,34 +18,19 @@ from datetime import datetime
 # Best guide so far:
 # https://sofiadutta.github.io/datascience-ipynbs/pytorch/CycleGAN_Img_Translation_PyTorch_Horse2Zebra.html
 
-# Current questions:
-# Why are the loss values so different?
-# What should they be?
-# What denotes success here?
 
-# Next work:
-# Automate saving the graph image
-# Play with hyperparameters to achieve success
-# Try converting some real audio
-# When successful, can we try non-normalised data?
-
-AUDIO_SOURCE_DIR = Path('/home/sparky/code/dead-cyclegan/data/split')
-
-BATCH_SIZE = 32
-EPOCHS = 120
+BATCH_SIZE = 1
+EPOCHS = 5
 # epoch in which to slow down the learning rate
-DECAY_EPOCH = 150
+DECAY_EPOCH = 100
 EPOCH_OFFSET = 1
+LEARNING_RATE = 0.000015
 RANDOM_SEED = 5
-
-# learning rates
-GEN_LEARNING_RATE = 0.0001
-DIS_LEARNING_RATE = 0.000005
 
 # ratio of files to train against
 RATIO = 0.95
 # what ratio of files to actually use
-USE_FILES = 0.3
+USE_FILES = 0.04
 
 # resnet layers to add - suggested is 9 (!)
 TOTAL_RESNETS = 6
@@ -57,10 +41,12 @@ LAYER1 = 64
 LAYER2 = 128
 LAYER3 = 512
 
+# learning rates
+GEN_LEARNING_RATE = 0.0002
+DIS_LEARNING_RATE = 0.0001
+
 REAL_LABEL = 1.0
 FAKE_LABEL = 0.0
-
-SAMPLE_RATE = 44100
 
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -70,91 +56,61 @@ else:
     print('* Using CPU')
 
 
-ROOT_FOLDER = Path.cwd() / 'data' / 'split'
+ROOT_FOLDER = Path.cwd() / 'data' / 'Split_Half'
 EXAMPLES_FOLDER = Path.cwd() / 'examples'
 MODEL_DIRECTORY = Path.cwd() / 'models'
 
 
 class AudioData(Dataset):
-    def __init__(self, files):
+    def __init__(self, files, low_bitrate, sbd=True):
         super().__init__()
-        self.all_files = files
-        # load all files into RAM!
-        self.audio = []
-        for i in tqdm(self.all_files):
-            self.audio.append(self.load_file(i))
+        self.all_files = []
+        for i in files:
+            if i.startswith('SBD'):
+                if sbd is True:
+                    self.all_files.append(i)
+            else:
+                if sbd is False:
+                    self.all_files.append(i)
+        self.low_bitrate = low_bitrate
 
     def show_top(self, total):
         files = [self.all_files[x] for x in range(total)]
         print(f'Top #{total}: {files}')
 
-    def load_file(self, filename):
-        signal, audio = librosa.core.load(filename, sr=SAMPLE_RATE, mono=False)
-        signal = signal.astype(np.float32)
-        signal /= 32768.0
-
-        # reshape the signal
-        n_channels = 1 if signal.ndim == 1 else signal.shape[1]
-        signal = signal.reshape(n_channels, signal.shape[0])
-
-        # normalize the signal
-        signal /= np.max(np.abs(signal))
-        return signal
-
     def __getitem__(self, index):
-        return self.audio[index]
+        data = self.all_files[index]
+        sfx = np.load(ROOT_FOLDER / data)
+        if self.low_bitrate is True:
+            # convert from 32 bit
+            sfx = np.float64(sfx)
+        # return a tensor, not an array
+        # this gives a 16384 Tensor, but we need (1, 16384) shape
+        audio = torch.from_numpy(sfx)
+        audio = (audio[None, :]).float()
+        return audio
 
     def __len__(self):
         return len(self.all_files)
 
 
-def get_all_wav_files(audio_dir):
-    wav_files = []
-    for song_dir in os.listdir(audio_dir):
-        full_path = audio_dir / song_dir
-        if os.path.isdir(full_path):
-            for possible_wav in os.listdir(full_path):
-                if str(possible_wav).lower().endswith('wav'):
-                    wav_files.append(full_path / possible_wav)
-    return wav_files
+def get_audio_loaders(low_bitrate=False):
+    files = os.listdir(ROOT_FOLDER)
 
+    print(f'* Found {len(files)} files')
 
-def get_fileset(string_end):
-    show_dirs = os.listdir(AUDIO_SOURCE_DIR)
-    audio_samples = []
-    for dir in show_dirs:
-        # look for folders ending
-        if os.path.isdir(AUDIO_SOURCE_DIR / dir) and str(dir.endswith(string_end)):
-            audio_samples.extend(get_all_wav_files(AUDIO_SOURCE_DIR / dir))
-    return audio_samples
+    random.shuffle(files)
+    files_to_use = int(len(files) * USE_FILES)
+    files = files[:files_to_use]
 
+    print(f'* Using {len(files)} files')
 
-def get_audio_loaders():
+    test_length = int(RATIO * len(files))
 
-    sbd_files = get_fileset('SBD')
-    aud_files = get_fileset('AUD')
-
-    print(f'* Found {len(sbd_files)} SBD files')
-    print(f'* Found {len(aud_files)} AUD files')
-
-    random.shuffle(sbd_files)
-    random.shuffle(aud_files)
-
-    sbd_files_to_use = int(len(sbd_files) * USE_FILES)
-    sbd_files = sbd_files[:sbd_files_to_use]
-    aud_files_to_use = int(len(aud_files) * USE_FILES)
-    aud_files = aud_files[:aud_files_to_use]
-
-    print(f'* Using {len(sbd_files)} SBD files')
-    print(f'* Using {len(sbd_files)} AUD files')
-
-    sbd_test_length = int(RATIO * len(sbd_files))
-    aud_test_length = int(RATIO * len(aud_files))
-
-    train_sbd_data = AudioData(sbd_files[:sbd_test_length])
-    train_aud_data = AudioData(aud_files[:aud_test_length])
-    test_sbd_data = AudioData(sbd_files[sbd_test_length:])
-    test_aud_data = AudioData(aud_files[aud_test_length:])
+    train_sbd_data = AudioData(files[:test_length], low_bitrate, True)
+    train_aud_data = AudioData(files[:test_length], low_bitrate, False)
+    test_sbd_data = AudioData(files[test_length:], low_bitrate, True)
+    test_aud_data = AudioData(files[test_length:], low_bitrate, False)
 
     train_sbd_loader = DataLoader(train_sbd_data, batch_size=BATCH_SIZE, shuffle=True)
     train_aud_loader = DataLoader(train_aud_data, batch_size=BATCH_SIZE, shuffle=True)
@@ -199,15 +155,15 @@ def get_discriminator():
     model = nn.Sequential()
 
     model.add_module('conv1', nn.Conv1d(in_channels=1, out_channels=LAYER1, kernel_size=16, stride=16))
-    model.add_module('norm1', nn.BatchNorm1d(LAYER1))
+    model.add_module('norm1', nn.InstanceNorm1d(LAYER1))
     model.add_module('relu1', nn.ReLU())
 
     model.add_module('conv2', nn.Conv1d(in_channels=LAYER1, out_channels=LAYER2, kernel_size=8, stride=8))
-    model.add_module('norm2', nn.BatchNorm1d(LAYER2))
+    model.add_module('norm2', nn.InstanceNorm1d(LAYER2))
     model.add_module('relu2', nn.ReLU())
 
     model.add_module('conv3', nn.Conv1d(in_channels=LAYER2, out_channels=LAYER3, kernel_size=8, stride=8))
-    model.add_module('norm3', nn.BatchNorm1d(LAYER3))
+    model.add_module('norm3', nn.InstanceNorm1d(LAYER3))
     model.add_module('relu3', nn.ReLU())
 
     model.add_module('conv4', nn.Conv1d(in_channels=LAYER3, out_channels=1, kernel_size=16, stride=16))
@@ -222,10 +178,10 @@ class ResidualBlock(nn.Module):
         # Batch size is 1, so use instancenorm
         # input -> Conv -> InstanceNorm -> Relu -> Conv -> InstanceNorm
         self.conv = nn.Sequential(nn.Conv1d(channels, channels, kernel_size=3, stride=1, padding=1),
-                                  nn.BatchNorm1d(channels),
+                                  nn.InstanceNorm1d(channels),
                                   nn.ReLU(),
                                   nn.Conv1d(channels, channels, kernel_size=3, stride=1, padding=1),
-                                  nn.BatchNorm1d(channels))
+                                  nn.InstanceNorm1d(channels))
         self.relu = nn.ReLU()
 
     def forward(self, x):
@@ -241,15 +197,15 @@ def get_generator():
     model = nn.Sequential()
 
     model.add_module('conv1', nn.Conv1d(in_channels=1, out_channels=LAYER1, kernel_size=16, stride=16))
-    model.add_module('norm1', nn.BatchNorm1d(LAYER1))
+    model.add_module('norm1', nn.InstanceNorm1d(LAYER1))
     model.add_module('relu1', nn.ReLU())
 
     model.add_module('conv2', nn.Conv1d(in_channels=LAYER1, out_channels=LAYER2, kernel_size=8, stride=8))
-    model.add_module('norm2', nn.BatchNorm1d(LAYER2))
+    model.add_module('norm2', nn.InstanceNorm1d(LAYER2))
     model.add_module('relu2', nn.ReLU())
 
     model.add_module('conv3', nn.Conv1d(in_channels=LAYER2, out_channels=LAYER3, kernel_size=8, stride=8))
-    model.add_module('norm3', nn.BatchNorm1d(LAYER3))
+    model.add_module('norm3', nn.InstanceNorm1d(LAYER3))
     model.add_module('relu3', nn.ReLU())
 
     # resnet blocks go here (sometimes called residual blocks)
@@ -258,15 +214,15 @@ def get_generator():
         model.add_module(f'resnet{resnet_index}', ResidualBlock(RESNET_CHANNELS))
         resnet_index += 1
 
-    model.add_module('norm4', nn.BatchNorm1d(LAYER3))
+    model.add_module('norm4', nn.InstanceNorm1d(LAYER3))
     model.add_module('relu4', nn.ReLU())
     model.add_module('iconv1', nn.ConvTranspose1d(in_channels=LAYER3, out_channels=LAYER2, kernel_size=8, stride=8))
 
-    model.add_module('norm5', nn.BatchNorm1d(LAYER2))
+    model.add_module('norm5', nn.InstanceNorm1d(LAYER2))
     model.add_module('relu5', nn.ReLU())
     model.add_module('iconv2', nn.ConvTranspose1d(in_channels=LAYER2, out_channels=LAYER1, kernel_size=8, stride=8))
 
-    model.add_module('norm6', nn.BatchNorm1d(LAYER1))
+    model.add_module('norm6', nn.InstanceNorm1d(LAYER1))
     model.add_module('relu6', nn.ReLU())
     model.add_module('iconv3', nn.ConvTranspose1d(in_channels=LAYER1, out_channels=1, kernel_size=16, stride=16))
 
@@ -307,7 +263,7 @@ def save_model(aud_to_sbd_model):
     now = datetime.now()
     filename = f'{str(now.year)[:2]}_{now.month:02d}_{now.day:02d}_{now.hour:02d}.pth'
     filepath = MODEL_DIRECTORY / filename
-    torch.save(aud_to_sbd_model.state_dict(), filepath)
+    torch.save(aud_to_sbd_model, filepath)
     print(f'* Saved model to {filepath}')
 
 
@@ -322,7 +278,7 @@ def weights_init(m):
 
 def train_cyclegan():
     # get data
-    train_sbd, train_aud, test_sbd, test_aud = get_audio_loaders()
+    train_sbd, train_aud, test_sbd, test_aud = get_audio_loaders(low_bitrate=True)
 
     disc_sbd = get_discriminator()
     disc_aud = get_discriminator()

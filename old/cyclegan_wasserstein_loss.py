@@ -19,15 +19,13 @@ from datetime import datetime
 # Best guide so far:
 # https://sofiadutta.github.io/datascience-ipynbs/pytorch/CycleGAN_Img_Translation_PyTorch_Horse2Zebra.html
 
-# Current questions:
-# Why are the loss values so different?
-# What should they be?
-# What denotes success here?
+# The issue we have is that the discriminator needs to be more of a critic, see
+# https://machinelearningmastery.com/how-to-implement-wasserstein-loss-for-generative-adversarial-networks/
 
 # Next work:
 # Automate saving the graph image
 # Play with hyperparameters to achieve success
-# Try converting some real audio
+# * Try converting some real audio
 # When successful, can we try non-normalised data?
 
 AUDIO_SOURCE_DIR = Path('/home/sparky/code/dead-cyclegan/data/split')
@@ -211,7 +209,7 @@ def get_discriminator():
     model.add_module('relu3', nn.ReLU())
 
     model.add_module('conv4', nn.Conv1d(in_channels=LAYER3, out_channels=1, kernel_size=16, stride=16))
-    model.add_module('sigmoid1', nn.Sigmoid())
+    #model.add_module('sigmoid1', nn.Sigmoid())
     model = model.to(device)
     return model
 
@@ -497,10 +495,10 @@ def clear_examples():
 
 
 def build_model():
-    # show_model(generator=True)
+    show_model(generator=False)
     # show_residual()
-    clear_examples()
-    train_cyclegan()
+    # clear_examples()
+    # train_cyclegan()
 
 
 if __name__ == '__main__':

@@ -56,7 +56,7 @@ class GDDataSet(Dataset):
         return data, torch.tensor(self.labels[index])
 
 
-def get_datasets():
+def get_datasets(max_length=-1):
     files = os.listdir(ROOT_FOLDER)
     shuffle(files)
 
@@ -85,6 +85,10 @@ def get_datasets():
 
     shuffle(train_files)
     shuffle(test_files)
+
+    if max_length >= 0:
+        train_files = train_files[:max_length]
+        test_files = test_files[:max_length]
 
     train_dataset = GDDataSet(train_files)
     test_dataset = GDDataSet(test_files)

@@ -16,5 +16,9 @@ venv/
 # ignore pycharm
 .idea/
 
+# ignore old versions
+old/
+old_versions/
+
 # ignore python builds
 __pycache__/

@@ -19,9 +19,9 @@ LEARNING_RATE = 0.000003
 RANDOM_SEED = 5
 
 # ratio of files to train against
-RATIO = 0.85
+RATIO = 0.8
 # what ratio of files to actuaLLY use
-USE_FILES = 1.0
+USE_FILES = 0.1
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 if torch.cuda.is_available():
@@ -84,30 +84,30 @@ def get_model():
     model = nn.Sequential()
 
     LAYER1 = 200
-    LAYER2 = 50
-    LAYER3 = 40
-    LAYER4 = 40
+    LAYER2 = 100
+    LAYER3 = 50
+    LAYER4 = 20
 
     model.add_module('conv1', nn.Conv1d(in_channels=1, out_channels=LAYER1, kernel_size=16, stride=16))
     model.add_module('norm1', nn.BatchNorm1d(LAYER1))
     model.add_module('relu1', nn.ReLU())
     model.add_module('pool1', nn.MaxPool1d(kernel_size=2))
-    #model.add_module('dropout1', nn.Dropout(p=0.5))
+    model.add_module('dropout1', nn.Dropout(p=0.5))
 
-    #model.add_module('conv2', nn.Conv1d(in_channels=LAYER1, out_channels=LAYER2, kernel_size=10, stride=10))
-    #model.add_module('norm2', nn.BatchNorm1d(LAYER2))
-    #model.add_module('relu2', nn.ReLU())
-    #model.add_module('pool2', nn.MaxPool1d(kernel_size=2))
-    #model.add_module('dropout2', nn.Dropout(p=0.5))
+    model.add_module('conv2', nn.Conv1d(in_channels=LAYER1, out_channels=LAYER2, kernel_size=10, stride=10))
+    model.add_module('norm2', nn.BatchNorm1d(LAYER2))
+    model.add_module('relu2', nn.ReLU())
+    model.add_module('pool2', nn.MaxPool1d(kernel_size=2))
+    model.add_module('dropout2', nn.Dropout(p=0.5))
 
-    #model.add_module('conv3', nn.Conv1d(in_channels=LAYER2, out_channels=LAYER3, kernel_size=6, stride=6))
-    #model.add_module('norm3', nn.BatchNorm1d(LAYER3))
-    #model.add_module('relu3', nn.ReLU())
-    #model.add_module('pool3', nn.MaxPool1d(kernel_size=2))
-    #model.add_module('dropout3', nn.Dropout(p=0.5))
+    model.add_module('conv3', nn.Conv1d(in_channels=LAYER2, out_channels=LAYER3, kernel_size=6, stride=6))
+    model.add_module('norm3', nn.BatchNorm1d(LAYER3))
+    model.add_module('relu3', nn.ReLU())
+    model.add_module('pool3', nn.MaxPool1d(kernel_size=2))
+    model.add_module('dropout3', nn.Dropout(p=0.5))
 
-    #model.add_module('conv4', nn.Conv1d(in_channels=LAYER3, out_channels=LAYER4, kernel_size=4, stride=4))
-    #model.add_module('norm4', nn.BatchNorm1d(LAYER4))
+    model.add_module('conv4', nn.Conv1d(in_channels=LAYER3, out_channels=LAYER4, kernel_size=4, stride=4))
+    model.add_module('norm4', nn.BatchNorm1d(LAYER4))
 
     model.add_module('pool6', nn.AvgPool1d(kernel_size=24))
     model.add_module('flatten1', nn.Flatten())
